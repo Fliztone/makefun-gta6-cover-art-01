@@ -1,0 +1,3 @@
+# The kit's vendored library must stay byte for byte as handed out: no EOL
+# normalization, ever.
+vendor/makefun-app.ts -text -diff
