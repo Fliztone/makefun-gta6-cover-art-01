@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vice Cover — GTA-style cover art studio</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">VICE<span>COVER</span></div>
+    <div class="tag">GTA-style cover art studio · photos in, poster out</div>
+  </div>
+  <div class="header-right">
+    <div class="segmented" id="sizes" role="group" aria-label="Export size">
+      <button data-size="square">1080 × 1080</button>
+      <button data-size="portrait" class="active">1080 × 1350</button>
+      <button data-size="landscape">1920 × 1080</button>
+    </div>
+    <button id="export" class="primary">Export PNG</button>
+  </div>
+</header>
+<main>
+  <aside id="sidebar">
+    <section>
+      <h2>Photos &amp; scenes</h2>
+      <p class="hint">Click a thumbnail to fill the selected panel. Drag a panel in the preview to move its photo, scroll to zoom.</p>
+      <div id="thumbs" class="thumbs"></div>
+      <div class="row">
+        <button id="add-photos" class="primary small">Add your photos</button>
+        <button id="shuffle" class="small">Shuffle</button>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple hidden>
+    </section>
+    <section>
+      <h2>Panel</h2>
+      <div id="panel-chips" class="chips"></div>
+      <div id="panel-name" class="panel-name">Panel 1</div>
+      <label class="slider-label" for="zoom">Zoom</label>
+      <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+      <div class="row">
+        <button id="reset-panel" class="small">Reset crop</button>
+        <button id="fill-all" class="small">Use in all panels</button>
+      </div>
+    </section>
+    <section>
+      <h2>Caption</h2>
+      <label class="field-label" for="caption-title">Title</label>
+      <input type="text" id="caption-title" value="VICE CITY" maxlength="40" spellcheck="false">
+      <label class="field-label" for="caption-subtitle">Subtitle</label>
+      <input type="text" id="caption-subtitle" value="SUNSET STRIP" maxlength="40" spellcheck="false">
+      <label class="field-label" for="caption-style">Lettering style</label>
+      <select id="caption-style"></select>
+      <div class="checks">
+        <label><input type="checkbox" id="toggle-badge" checked> VI badge</label>
+        <label><input type="checkbox" id="toggle-palms" checked> Palm silhouettes</label>
+      </div>
+    </section>
+    <section>
+      <h2>Look</h2>
+      <div id="layouts" class="layouts"></div>
+      <div id="grades" class="grades"></div>
+      <div class="row">
+        <span class="field-label inline">Border</span>
+        <div class="segmented" id="borders" role="group" aria-label="Border colour">
+          <button data-border="white" class="active">White</button>
+          <button data-border="black">Black</button>
+        </div>
+      </div>
+    </section>
+  </aside>
+  <div id="stage">
+    <canvas id="preview"></canvas>
+    <div id="toast" role="status"></div>
+  </div>
+</main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
