@@ -1,139 +1,130 @@
-// layouts.js — panel layouts for the cover, in the spirit of the classic
-// multi-panel game posters: a grid, a hero collage, a diagonal duo and a
-// mosaic. Every layout returns panels as rects or polygons in cover pixels,
-// with a border gap between them; the renderer clips each panel to its shape.
+// Poster geometry: the white frame, the caption band and the panel shapes for
+// each of the four layouts. All sizes derive from the export dimensions, so a
+// layout keeps its proportions at 1080x1080, 1080x1350 and 1920x1080.
 
-/** Border width for a cover size: a bold poster frame, scale-invariant. */
-export function borderWidth(w, h) {
-  return Math.max(4, Math.round(Math.min(w, h) * 0.016));
+export const SIZES = {
+  square: { w: 1080, h: 1080, label: '1080 × 1080' },
+  portrait: { w: 1080, h: 1350, label: '1080 × 1350' },
+  wide: { w: 1920, h: 1080, label: '1920 × 1080' },
+};
+
+export const LAYOUTS = ['grid', 'hero', 'mosaic', 'duo'];
+
+/** Frame metrics shared by every layout at a given export size. */
+export function frameMetrics(W, H) {
+  const border = Math.round(W * 0.022);
+  const gutter = Math.round(W * 0.012);
+  const bandH = Math.round(H * (W > H ? 0.26 : 0.21));
+  return {
+    border,
+    gutter,
+    bandH,
+    area: {
+      x: border,
+      y: border,
+      w: W - border * 2,
+      h: H - border * 2 - bandH - gutter,
+    },
+  };
 }
 
-/** Rect panels on a cols x rows grid inside the frame. */
-function grid(w, h, b, cols, rows) {
-  const panels = [];
-  const cw = (w - b * (cols + 1)) / cols;
-  const ch = (h - b * (rows + 1)) / rows;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      panels.push({ x: b + c * (cw + b), y: b + r * (ch + b), w: cw, h: ch });
-    }
+/** The white caption band along the bottom of the poster. */
+export function captionBand(W, H) {
+  const m = frameMetrics(W, H);
+  return { x: m.border, y: H - m.border - m.bandH, w: W - m.border * 2, h: m.bandH };
+}
+
+function rect(x, y, w, h) {
+  return { x, y, w, h };
+}
+
+/**
+ * Panel shapes in fill order. Each shape carries a bounding box for the photo
+ * transform and, for the diagonal duo, a clip polygon.
+ */
+export function panelShapes(layout, W, H) {
+  const { area, gutter } = frameMetrics(W, H);
+  const { x, y, w, h } = area;
+  if (layout === 'grid') {
+    const cw = (w - gutter) / 2;
+    const ch = (h - gutter) / 2;
+    return [
+      rect(x, y, cw, ch),
+      rect(x + cw + gutter, y, cw, ch),
+      rect(x, y + ch + gutter, cw, ch),
+      rect(x + cw + gutter, y + ch + gutter, cw, ch),
+    ];
   }
-  return panels;
-}
-
-/** The six-panel poster grid: 2x3 portrait, 3x2 landscape. */
-function layoutGrid(w, h, b) {
-  return w >= h ? grid(w, h, b, 3, 2) : grid(w, h, b, 2, 3);
-}
-
-/** Hero collage: one large panel plus three smaller ones. */
-function layoutHero(w, h, b) {
-  if (w >= h) {
-    const bigW = (w - b * 2) * 0.60;
-    const smallW = w - b * 3 - bigW;
-    const smallH = (h - b * 4) / 3;
-    const panels = [{ x: b, y: b, w: bigW, h: h - b * 2 }];
-    for (let i = 0; i < 3; i++) {
-      panels.push({ x: b * 2 + bigW, y: b + i * (smallH + b), w: smallW, h: smallH });
-    }
-    return panels;
+  if (layout === 'hero') {
+    const topH = (h - gutter) * 0.62;
+    const bottomH = h - gutter - topH;
+    const cw = (w - gutter) / 2;
+    return [
+      rect(x, y, w, topH),
+      rect(x, y + topH + gutter, cw, bottomH),
+      rect(x + cw + gutter, y + topH + gutter, cw, bottomH),
+    ];
   }
-  const bigH = (h - b * 2) * 0.58;
-  const smallH = h - b * 3 - bigH;
-  const smallW = (w - b * 4) / 3;
-  const panels = [{ x: b, y: b, w: w - b * 2, h: bigH }];
-  for (let i = 0; i < 3; i++) {
-    panels.push({ x: b + i * (smallW + b), y: b * 2 + bigH, w: smallW, h: smallH });
+  if (layout === 'mosaic') {
+    const leftW = (w - gutter) * 0.58;
+    const rightW = w - gutter - leftW;
+    const ch = (h - gutter) / 2;
+    return [
+      rect(x, y, leftW, h),
+      rect(x + leftW + gutter, y, rightW, ch),
+      rect(x + leftW + gutter, y + ch + gutter, rightW, ch),
+    ];
   }
-  return panels;
-}
-
-/** Diagonal duo: two panels split by a slanted border. */
-function layoutDuo(w, h, b) {
-  const g = b * 0.75;
-  const topX = w * 0.60, botX = w * 0.40;
-  return [
-    { poly: [[0, 0], [topX - g, 0], [botX - g, h], [0, h]] },
-    { poly: [[topX + g, 0], [w, 0], [w, h], [botX + g, h]] },
+  // duo: two panels split by a slanted white band
+  const topSplit = 0.56;
+  const bottomSplit = 0.44;
+  const gap = gutter * 1.7;
+  const left = rect(x, y, w * topSplit + gap / 2, h);
+  left.poly = [
+    [x, y],
+    [x + w * topSplit, y],
+    [x + w * bottomSplit, y + h],
+    [x, y + h],
   ];
+  const right = rect(x + w * topSplit + gap, y, w - w * topSplit - gap, h);
+  right.poly = [
+    [x + w * topSplit + gap, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x + w * bottomSplit + gap, y + h],
+  ];
+  return [left, right];
 }
 
-/** Mosaic: one big panel beside (or above) four smaller ones. */
-function layoutMosaic(w, h, b) {
-  if (w >= h) {
-    const bigH = (h - b * 2) * 0.55;
-    const smallH = h - b * 3 - bigH;
-    const smallW = (w - b * 5) / 4;
-    const panels = [{ x: b, y: b, w: w - b * 2, h: bigH }];
-    for (let i = 0; i < 4; i++) {
-      panels.push({ x: b + i * (smallW + b), y: b * 2 + bigH, w: smallW, h: smallH });
-    }
-    return panels;
-  }
-  const bigW = (w - b * 2) * 0.55;
-  const smallW = w - b * 3 - bigW;
-  const smallH = (h - b * 3) / 2;
-  const panels = [{ x: b, y: b, w: bigW, h: h - b * 2 }];
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 2; c++) {
-      panels.push({ x: b * 2 + bigW + c * (smallW + b), y: b + r * (smallH + b), w: smallW, h: smallH });
-    }
-  }
-  return panels;
+export function panelCount(layout) {
+  return layout === 'grid' ? 4 : layout === 'duo' ? 2 : 3;
 }
 
-/** The layouts the editor offers, with their panel counts. */
-export const LAYOUTS = [
-  { id: 'grid', name: 'Poster Grid', panels: 6, compute: layoutGrid },
-  { id: 'hero', name: 'Hero Collage', panels: 4, compute: layoutHero },
-  { id: 'mosaic', name: 'Mosaic', panels: 5, compute: layoutMosaic },
-  { id: 'duo', name: 'Diagonal Duo', panels: 2, compute: layoutDuo },
-];
-
-/** Panel shapes for a layout at a cover size. */
-export function panelShapes(layoutId, w, h) {
-  const layout = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0];
-  return layout.compute(w, h, borderWidth(w, h));
-}
-
-/** The bounding rect of a panel shape (rect or polygon). */
-export function panelBounds(shape) {
-  if (!shape.poly) return shape;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const [x, y] of shape.poly) {
-    x0 = Math.min(x0, x); y0 = Math.min(y0, y);
-    x1 = Math.max(x1, x); y1 = Math.max(y1, y);
-  }
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-}
-
-/** Clip a context to a panel shape. */
-export function clipPanel(ctx, shape) {
+/** Trace a panel shape (polygon for the duo, rectangle otherwise). */
+export function traceShape(ctx, shape) {
   ctx.beginPath();
   if (shape.poly) {
     ctx.moveTo(shape.poly[0][0], shape.poly[0][1]);
     for (let i = 1; i < shape.poly.length; i++) ctx.lineTo(shape.poly[i][0], shape.poly[i][1]);
+    ctx.closePath();
   } else {
     ctx.rect(shape.x, shape.y, shape.w, shape.h);
   }
-  ctx.closePath();
-  ctx.clip();
 }
 
-/** Hit-test a cover-space point against the panels; returns the index or -1. */
-export function hitPanel(shapes, x, y) {
-  for (let i = shapes.length - 1; i >= 0; i--) {
-    const s = shapes[i];
-    if (s.poly) {
-      let inside = false;
-      const p = s.poly;
-      for (let a = 0, b = p.length - 1; a < p.length; b = a++) {
-        if (p[a][1] > y !== p[b][1] > y && x < ((p[b][0] - p[a][0]) * (y - p[a][1])) / (p[b][1] - p[a][1]) + p[a][0]) inside = !inside;
-      }
-      if (inside) return i;
-    } else if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
-      return i;
+/** Point-in-shape test used to pick the panel under the pointer. */
+export function shapeContains(shape, px, py) {
+  if (!shape.poly) {
+    return px >= shape.x && px <= shape.x + shape.w && py >= shape.y && py <= shape.y + shape.h;
+  }
+  let inside = false;
+  const pts = shape.poly;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
     }
   }
-  return -1;
+  return inside;
 }

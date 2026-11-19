@@ -1,48 +1,52 @@
-// serve.ts — a tiny static file server for trying the app locally:
-//   node serve.ts   →   http://localhost:8080
-// Standard library only; not part of the graded hand-in.
+// Tiny static server for trying the studio locally: node serve.ts [port].
+// Serves app/ at http://localhost:8080 with no dependencies and no network
+// access beyond the loopback interface.
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = join(fileURLToPath(new URL('.', import.meta.url)), 'app');
-const port = Number(process.env.PORT ?? 8080);
+const appRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'app');
+const port = Number(process.argv[2] ?? 8080);
 
-const TYPES: Record<string, string> = {
+const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.ttf': 'font/ttf',
+  '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   try {
-    const url = new URL(req.url ?? '/', `http://localhost:${port}`);
-    let pathname = decodeURIComponent(url.pathname);
-    if (pathname.endsWith('/')) pathname += 'index.html';
-    const file = normalize(join(root, pathname));
-    if (file !== root && !file.startsWith(root + sep)) {
-      res.writeHead(403); res.end('forbidden'); return;
+    const urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    let filePath = normalize(join(appRoot, urlPath === '/' ? 'index.html' : urlPath));
+    if (!filePath.startsWith(appRoot + sep) && filePath !== appRoot) {
+      res.writeHead(403).end('Forbidden');
+      return;
     }
-    const data = await readFile(file);
+    const info = await stat(filePath).catch(() => null);
+    if (info?.isDirectory()) filePath = join(filePath, 'index.html');
+    const body = await readFile(filePath);
     res.writeHead(200, {
-      'Content-Type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
+      'Content-Type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
       'Cache-Control': 'no-store',
     });
-    res.end(data);
+    res.end(body);
   } catch {
-    res.writeHead(404);
-    res.end('not found');
+    res.writeHead(404).end('Not found');
   }
-}).listen(port, () => {
-  console.log(`Vice Cover running at http://localhost:${port}`);
+});
+
+server.listen(port, '127.0.0.1', () => {
+  console.log(`Vice Cover studio at http://localhost:${port}`);
 });

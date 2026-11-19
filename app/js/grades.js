@@ -1,82 +1,76 @@
-// grades.js — the colour grades that give any photo or scene the Vice City
-// look: a canvas filter pass plus blended gradient overlays and a vignette.
-// Each grade is pure data so the editor can show it as a swatch.
+// The five color grades. Each grade is a canvas filter applied while the photo
+// is drawn, plus a gradient wash and a vignette, so grading stays fast and
+// deterministic (no per-pixel loops, no randomness).
 
-export const GRADES = [
-  {
-    id: 'sunset',
-    name: 'Vice Sunset',
-    swatch: 'linear-gradient(180deg,#3b1160,#ff5e78 55%,#ffb347)',
-    filter: 'saturate(1.28) contrast(1.06)',
-    overlay: { stops: [[0, '#3b1160'], [0.55, '#ff5e78'], [1, '#ffb347']], blend: 'overlay', alpha: 0.34 },
-    vignette: 0.30,
-  },
-  {
-    id: 'neon',
-    name: 'Neon Night',
-    swatch: 'linear-gradient(180deg,#00e5ff,#7a2bff 50%,#ff2fd6)',
-    filter: 'saturate(1.45) contrast(1.12) brightness(0.94)',
-    overlay: { stops: [[0, '#00e5ff'], [0.5, '#7a2bff'], [1, '#ff2fd6']], blend: 'overlay', alpha: 0.42 },
-    lift: { color: '#12043a', blend: 'screen', alpha: 0.22 },
-    vignette: 0.42,
-  },
-  {
-    id: 'golden',
-    name: 'Golden Hour',
-    swatch: 'linear-gradient(180deg,#ffe0a0,#ffcf6e 50%,#ff7a3d)',
-    filter: 'saturate(1.18) contrast(1.05)',
-    overlay: { stops: [[0, '#ffe0a0'], [0.5, '#ffcf6e'], [1, '#ff7a3d']], blend: 'overlay', alpha: 0.30 },
+import { traceShape } from './layouts.js';
+
+export const GRADES = {
+  sunset: {
+    label: 'Vice Sunset',
+    swatch: ['#ffd75e', '#ff4f9a', '#7b2fd6'],
+    filter: 'saturate(1.35) contrast(1.08) brightness(1.03)',
+    wash: [[0, 'rgba(255,196,90,0.34)'], [0.55, 'rgba(255,84,150,0.28)'], [1, 'rgba(96,32,168,0.36)']],
+    blend: 'soft-light',
     vignette: 0.24,
   },
-  {
-    id: 'ocean',
-    name: 'Ocean Drive',
-    swatch: 'linear-gradient(180deg,#0affd9,#2aa8c9 55%,#0a6cff)',
-    filter: 'saturate(1.25) contrast(1.06)',
-    overlay: { stops: [[0, '#0affd9'], [0.55, '#2aa8c9'], [1, '#0a6cff']], blend: 'overlay', alpha: 0.32 },
-    vignette: 0.28,
+  neon: {
+    label: 'Neon Night',
+    swatch: ['#23d9ff', '#3a2a8a', '#ff3fd8'],
+    filter: 'saturate(1.55) contrast(1.2) brightness(0.82)',
+    wash: [[0, 'rgba(32,220,255,0.32)'], [1, 'rgba(255,44,220,0.36)']],
+    blend: 'soft-light',
+    vignette: 0.42,
   },
-  {
-    id: 'raw',
-    name: 'No Grade',
-    swatch: 'linear-gradient(180deg,#888,#444)',
+  golden: {
+    label: 'Golden Hour',
+    swatch: ['#ffe9a8', '#ffb02e', '#c96a2e'],
+    filter: 'sepia(0.3) saturate(1.5) contrast(1.06)',
+    wash: [[0, 'rgba(255,220,130,0.38)'], [1, 'rgba(255,122,52,0.32)']],
+    blend: 'soft-light',
+    vignette: 0.18,
+  },
+  ocean: {
+    label: 'Ocean Drive',
+    swatch: ['#8fe8e0', '#2e9ec9', '#1c3f8f'],
+    filter: 'saturate(1.28) contrast(1.07) hue-rotate(12deg) brightness(1.02)',
+    wash: [[0, 'rgba(90,226,230,0.3)'], [1, 'rgba(24,84,200,0.36)']],
+    blend: 'soft-light',
+    vignette: 0.22,
+  },
+  raw: {
+    label: 'Raw Photo',
+    swatch: ['#cfcfcf', '#8a8a8a', '#4a4a4a'],
     filter: 'none',
-    overlay: null,
-    vignette: 0.12,
+    wash: null,
+    blend: null,
+    vignette: 0,
   },
-];
+};
 
-export function gradeById(id) {
-  return GRADES.find((g) => g.id === id) ?? GRADES[0];
-}
+export const GRADE_IDS = Object.keys(GRADES);
 
-/** Apply a grade inside an already-clipped panel rect. */
-export function applyGrade(ctx, x, y, w, h, grade) {
-  if (grade.overlay) {
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    for (const [o, c] of grade.overlay.stops) g.addColorStop(o, c);
+/** Draw the grade's wash and vignette inside the current clip. */
+export function applyGradeOverlay(ctx, shape, grade) {
+  const { x, y, w, h } = shape;
+  if (grade.wash) {
+    const g = ctx.createLinearGradient(x, y, x, y + h);
+    for (const [p, c] of grade.wash) g.addColorStop(p, c);
     ctx.save();
-    ctx.globalCompositeOperation = grade.overlay.blend;
-    ctx.globalAlpha = grade.overlay.alpha;
+    ctx.globalCompositeOperation = grade.blend;
     ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
-  }
-  if (grade.lift) {
-    ctx.save();
-    ctx.globalCompositeOperation = grade.lift.blend;
-    ctx.globalAlpha = grade.lift.alpha;
-    ctx.fillStyle = grade.lift.color;
-    ctx.fillRect(x, y, w, h);
+    traceShape(ctx, shape);
+    ctx.fill();
     ctx.restore();
   }
   if (grade.vignette > 0) {
-    const cx = x + w / 2, cy = y + h / 2;
-    const r = Math.max(w, h) * 0.75;
-    const v = ctx.createRadialGradient(cx, cy, r * 0.45, cx, cy, r);
-    v.addColorStop(0, 'rgba(10,2,24,0)');
-    v.addColorStop(1, `rgba(10,2,24,${grade.vignette})`);
-    ctx.fillStyle = v;
-    ctx.fillRect(x, y, w, h);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const r = Math.hypot(w, h) / 2;
+    const g = ctx.createRadialGradient(cx, cy, r * 0.45, cx, cy, r);
+    g.addColorStop(0, 'rgba(12,4,32,0)');
+    g.addColorStop(1, `rgba(12,4,32,${grade.vignette})`);
+    ctx.fillStyle = g;
+    traceShape(ctx, shape);
+    ctx.fill();
   }
 }
